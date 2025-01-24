@@ -72,3 +72,4 @@ PCOS_data['Fast food (Y/N)'].fillna(PCOS_data['Fast food (Y/N)'].median(),inplac
 
 #Clearing up the extra space in the column names (optional)
 PCOS_data.columns = [col.strip() for col in PCOS_data.columns]
+PCOS_data.to_csv("data/PCOS_Cleaned_Data.csv", index=False)
