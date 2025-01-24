@@ -5,70 +5,70 @@ import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
-df=pd.read_csv("data/Cleaned-Data.csv")
 
-# 1. Basic statistics
-print(df.describe())
+# import kagglehub
+# Download latest version
+# path = kagglehub.dataset_download("prasoonkottarathil/polycystic-ovary-syndrome-pcos")
 
-# 2. Correlation analysis for numerical columns
-numerical_cols = df.select_dtypes(include=['int64', 'float64']).columns
-correlation_matrix = df[numerical_cols].corr()
-plt.figure(figsize=(12, 10))
-sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm')
-plt.title('Correlation Heatmap of Numerical Variables')
+
+# Data Preprocessing and cleaning
+file_path_with_infertility = "data/PCOS_infertility.csv"
+file_path_without_infertility = "data/PCOS_data_without_infertility.xlsx"
+PCOS_winf = pd.read_csv(file_path_with_infertility)
+PCOS_woinf = pd.read_excel(file_path_without_infertility, sheet_name="Full_new")
+
+PCOS_winf.describe()
+PCOS_woinf.describe()
+
+#Mergin two datasets based on the Patient File No.
+PCOS_data = pd.merge(PCOS_woinf, PCOS_winf, on="Patient File No.", suffixes=['','_w'],how='left')
+
+#checking for duplicated columns
+dup_cols = np.array([col for col in PCOS_data.columns if col.endswith("_w")])
+drop_cols = np.append(dup_cols, "Unnamed: 44")
+
+#drop duplicated cols and unnamed 44 (which is always null)
+PCOS_data.drop(drop_cols, axis=1, inplace=True)
+
+#Managinng Categorical values.
+#In this database items with the object Dtype are just numeric values which saved as strings.
+#we can just convert them into numeric values.
+PCOS_data["AMH(ng/mL)"] = pd.to_numeric(PCOS_data["AMH(ng/mL)"], errors='coerce')
+PCOS_data["II    beta-HCG(mIU/mL)"] = pd.to_numeric(PCOS_data["II    beta-HCG(mIU/mL)"], errors='coerce')
+
+#Managing missing values.
+#Filling NA values with the median of that feature.
+PCOS_data.isnull().sum()
+
+#Plotting box-plots for missed value attrs
+
+#Marriage Status
+sns.boxplot(x=PCOS_data['Marraige Status (Yrs)'], color='skyblue')
+plt.title('Boxplot of Marriage Status (Years)')
+plt.xlabel('Marriage Duration (Years)')
 plt.show()
 
-# 3. Distribution of PCOS
-plt.figure(figsize=(8, 6))
-df['PCOS'].value_counts().plot(kind='pie', autopct='%1.1f%%')
-plt.title('Distribution of PCOS')
+# II    beta-HCG(mIU/mL)
+sns.boxplot(x=PCOS_data['II    beta-HCG(mIU/mL)'], color='skyblue')
+plt.title('Boxplot of II    beta-HCG(mIU/mL)')
+plt.xlabel('II    beta-HCG(mIU/mL)')
 plt.show()
 
-# 4. Age distribution
-plt.figure(figsize=(10, 6))
-sns.histplot(df['Age'], kde=True)
-plt.title('Age Distribution')
+# AMH(ng/mL)
+sns.boxplot(x=PCOS_data['AMH(ng/mL)'], color='skyblue')
+plt.title('Boxplot of AMH(ng/mL)')
+plt.xlabel('AMH(ng/mL)')
 plt.show()
 
-# 5. BMI calculation and distribution
-df['BMI'] = df['Weight_kg'] / ((df['Height_ft'] * 0.3048) ** 2)
-plt.figure(figsize=(10, 6))
-sns.histplot(df['BMI'], kde=True)
-plt.title('BMI Distribution')
-plt.show()
+# based on the box-plots for each attribute i decided to choose wheter mean or media:
+# if the data was skewed I'd choose median and otherwise mean,
+# also mean is less chosen due to its sensitivity to outliers.
 
-# 6. Relationship between BMI and PCOS
-plt.figure(figsize=(10, 6))
-sns.boxplot(x='PCOS', y='BMI', data=df)
-plt.title('BMI vs PCOS')
-plt.show()
+PCOS_data['Marraige Status (Yrs)'].fillna(PCOS_data['Marraige Status (Yrs)'].median(),inplace=True)
+PCOS_data['II    beta-HCG(mIU/mL)'].fillna(PCOS_data['II    beta-HCG(mIU/mL)'].median(),inplace=True)
+PCOS_data['AMH(ng/mL)'].fillna(PCOS_data['AMH(ng/mL)'].median(),inplace=True)
+PCOS_data['Fast food (Y/N)'].fillna(PCOS_data['Fast food (Y/N)'].median(),inplace=True)
 
-# 7. Relationship between exercise frequency and PCOS
-plt.figure(figsize=(12, 6))
-sns.countplot(x='Exercise_Frequency', hue='PCOS', data=df)
-plt.title('Exercise Frequency vs PCOS')
-plt.xticks(rotation=45)
-plt.show()
 
-# 8. Diet patterns for PCOS vs non-PCOS
-diet_cols = [col for col in df.columns if col.startswith('Diet_')]
-df_diet = df[diet_cols + ['PCOS']]
-df_diet_melted = pd.melt(df_diet, id_vars=['PCOS'], var_name='Diet_Category', value_name='Consumption')
-
-plt.figure(figsize=(14, 8))
-sns.boxplot(x='Diet_Category', y='Consumption', hue='PCOS', data=df_diet_melted)
-plt.title('Diet Patterns: PCOS vs Non-PCOS')
-plt.xticks(rotation=90)
-plt.show()
-
-# 9. Stress level and PCOS
-plt.figure(figsize=(10, 6))
-sns.countplot(x='Stress_Level', hue='PCOS', data=df)
-plt.title('Stress Level vs PCOS')
-plt.show()
-
-# 10. Menstrual irregularity and PCOS
-plt.figure(figsize=(10, 6))
-sns.countplot(x='Menstrual_Irregularity', hue='PCOS', data=df)
-plt.title('Menstrual Irregularity vs PCOS')
-plt.show()
+#Clearing up the extra space in the column names (optional)
+PCOS_data.columns = [col.strip() for col in PCOS_data.columns]
