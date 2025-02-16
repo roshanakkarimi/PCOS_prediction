@@ -11,12 +11,18 @@ from sklearn.metrics import accuracy_score
 
 data = pd.read_csv('data/PCOS_Cleaned_Data.csv')
 
+
 #Assiging the features (X)and target(y)
+
 X=data.drop(["PCOS (Y/N)","Sl. No","Patient File No."],axis = 1) #droping out index from features too
 y=data["PCOS (Y/N)"]
 
+
 #Splitting the data into test and training sets
-X_train,X_test, y_train, y_test = train_test_split(X,y, test_size=0.4)
+selected_features = X[['Follicle No. (R)', 'Follicle No. (L)', 'Skin darkening (Y/N)', 'hair growth(Y/N)', 'Weight gain(Y/N)', 'Cycle(R/I)', 'Fast food (Y/N)', 'Pimples(Y/N)', 'AMH(ng/mL)']]
+X_train, X_test, y_train, y_test = train_test_split(
+    selected_features, y, test_size=0.2, stratify=y, random_state=42
+)
 
 #Fitting the RandomForestClassifier to the training set
 rfc = RandomForestClassifier()
@@ -31,19 +37,21 @@ print(accuracy)
 from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers import Adam, RMSprop, SGD
 
 
 # Separate features (X) and target (y)
 X = data.drop(columns=['PCOS (Y/N)'])  # Features
 y = data['PCOS (Y/N)']  # Target (1 for PCOS, 0 for non-PCOS)
 
-# Encode categorical variables (if any)
-X = pd.get_dummies(X, drop_first=True)
+selected_features = X[['Follicle No. (R)', 'Follicle No. (L)', 'Skin darkening (Y/N)', 'hair growth(Y/N)', 'Weight gain(Y/N)', 'Cycle(R/I)', 'Fast food (Y/N)', 'Pimples(Y/N)', 'AMH(ng/mL)']]
+X_train1, X_test, y_train1, y_test = train_test_split(
+    selected_features, y, test_size=0.2, stratify=y, random_state=42
+)
 
-# Split the data into training, validation, and test sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=42)
-X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.4, random_state=42)
+X_val, X_train, y_val, y_train = train_test_split(
+    X_train1, y_train1, test_size=0.2, stratify=y_train1, random_state=42
+)
 
 # Normalize/Standardize the features
 scaler = StandardScaler()
@@ -55,13 +63,13 @@ X_test = scaler.transform(X_test)
 from tensorflow.keras.regularizers import l2
 model = Sequential()
 model.add(Dense(64, input_dim=X_train.shape[1], activation='relu', kernel_regularizer=l2(0.01)))  # Input layer
-model.add(Dropout(0.3))
+model.add(Dropout(0.5))
 model.add(Dense(32, activation='relu', kernel_regularizer=l2(0.01)))  # Hidden layer
-model.add(Dropout(0.3))  # Dropout for regularization
+model.add(Dropout(0.5))  # Dropout for regularization
 model.add(Dense(1, activation='sigmoid'))  # Output layer
 
 # Compile the model
-model.compile(optimizer=Adam(learning_rate=0.001), loss='binary_crossentropy', metrics=['accuracy'])
+model.compile(optimizer=Adam(learning_rate=0.05), loss='binary_crossentropy', metrics=['accuracy'])
 
 # Train the model
 history = model.fit(

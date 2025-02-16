@@ -2,57 +2,78 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.metrics import classification_report, roc_auc_score
+import xgboost as xgb
+
 
 #Examaning a correlation matrix of all the features
-data = pd.read_csv('data/PCOS_Cleaned_Data.csv')
-corrmat = data.corr()
-plt.subplots(figsize=(18,18))
-sns.heatmap(corrmat,cmap="Pastel1", square=True)
-plt.show()
+df = pd.read_csv('data/PCOS_Cleaned_Data.csv')
 
-#How all the features correlate with the PCOS
-print(corrmat["PCOS (Y/N)"].sort_values(ascending=False))
+# Separate features and target
+X = df.drop(["PCOS (Y/N)", "Patient File No."], axis=1)  # Drop non-predictive columns
+y = df["PCOS (Y/N)"]
 
+# For numerical features: ANOVA F-test
+selector_num = SelectKBest(score_func=f_classif, k='all')
 
-#Having a look at features bearing significant correlation
-plt.figure(figsize=(12,12))
-k = 12 #number of variables with positive for heatmap
-l = 3 #number of variables with negative for heatmap
-cols_p = corrmat.nlargest(k, "PCOS (Y/N)")["PCOS (Y/N)"].index
-cols_n = corrmat.nsmallest(l, "PCOS (Y/N)")["PCOS (Y/N)"].index
-cols = cols_p.append(cols_n)
+selector_num.fit(X.select_dtypes(include=['int64', 'float64']), y)
 
-cm = np.corrcoef(data[cols].values.T)
-sns.set(font_scale=1.25)
-hm = sns.heatmap(cm, cbar=True,cmap="Pastel1", annot=True, square=True, fmt='.2f', annot_kws={'size': 10}, yticklabels=cols.values, xticklabels=cols.values)
-plt.show()
+anova_f_scores = pd.DataFrame({
+    'Feature': X.select_dtypes(include=['int64', 'float64']).columns,
+    'ANOVA Score': selector_num.scores_
+}).sort_values(by='ANOVA Score', ascending=False)
 
-# Length of menstrual phase in PCOS vs normal
-color = ["teal", "plum"]
-fig=sns.lmplot(data=data,x="Age (yrs)",y="Cycle length(days)", hue="PCOS (Y/N)",palette=color)
-plt.show()
+anova_p_values = pd.DataFrame({
+    'Feature': X.select_dtypes(include=['int64', 'float64']).columns,
+    'ANOVA Score': selector_num.pvalues_
+}).sort_values(by='ANOVA Score', ascending=True)
 
-# Pattern of weight gain (BMI) over years in PCOS and Normal.
-fig= sns.lmplot(data =data,x="Age (yrs)",y="BMI", hue="PCOS (Y/N)", palette= color )
-plt.show()
-
-# cycle IR wrt age
-sns.lmplot(data =data,x="Age (yrs)",y="Cycle(R/I)", hue="PCOS (Y/N)",palette=color)
-plt.show()
-
-# Distribution of follicles in both ovaries.
-sns.lmplot(data =data,x='Follicle No. (R)',y='Follicle No. (L)', hue="PCOS (Y/N)",palette=color)
-plt.show()
-
-features = ["Follicle No. (L)","Follicle No. (R)"]
-for i in features:
-    sns.swarmplot(x=data["PCOS (Y/N)"], y=data[i], color="black", alpha=0.5 )
-    sns.boxenplot(x=data["PCOS (Y/N)"], y=data[i], palette=color)
-    plt.show()
+print("Top Numerical Features by F:\n", anova_f_scores.head(10))
+print("Top Numerical Features by P:\n", anova_p_values.head(10))
 
 
-features = ["Age (yrs)","Weight (Kg)", "BMI", "Hb(g/dl)", "Cycle length(days)","Endometrium (mm)" ]
-for i in features:
-    sns.swarmplot(x=data["PCOS (Y/N)"], y=data[i], color="black", alpha=0.5 )
-    sns.boxenplot(x=data["PCOS (Y/N)"], y=data[i], palette=color)
-    plt.show()
+#test model training with p_values > 0.05 removed
+selector = SelectKBest(score_func=f_classif, k=15)  # Select top 15 features
+X_selected = selector.fit_transform(X, y)
+
+# Get selected feature names
+
+selected_features = X[['Follicle No. (R)', 'Follicle No. (L)', 'Skin darkening (Y/N)', 'hair growth(Y/N)', 'Weight gain(Y/N)', 'Cycle(R/I)', 'Fast food (Y/N)', 'Pimples(Y/N)', 'AMH(ng/mL)']]
+X_train, X_test, y_train, y_test = train_test_split(
+    selected_features, y, test_size=0.2, stratify=y, random_state=42
+)
+
+scale_pos_weight = np.sum(y == 0) / np.sum(y == 1)  # Adjust for imbalance
+
+# Train XGBoost
+# -------------
+XGB_model = xgb.XGBClassifier(
+    objective='binary:logistic',
+    n_estimators=1000,
+    learning_rate=0.05,
+    max_depth=5,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    scale_pos_weight=scale_pos_weight,
+    early_stopping_rounds=20,
+    random_state=42,
+    eval_metric='auc'
+)
+
+# Early stopping to prevent overfitting
+eval_set = [(X_train, y_train), (X_test, y_test)]
+XGB_model.fit(
+    X_train, y_train,
+    eval_set=eval_set,
+    verbose=True
+)
+
+# Evaluate
+# --------
+y_pred = XGB_model.predict(X_test)
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred))
+
+print("\nAUC-ROC:", roc_auc_score(y_test, y_pred))
